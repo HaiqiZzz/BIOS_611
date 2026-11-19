@@ -1,3 +1,6 @@
+# Final Project git link
+https://github.com/HaiqiZzz/BIOS_611/tree/main/Final_Project
+
 # NYC Citywide Payroll Analysis (2015–2020)
 
 This project analyzes NYC employee payroll trends, annual base salary distribution, agency-level payroll spending, and median gross pay by work location. The source report is `611_FP.Rmd`.
