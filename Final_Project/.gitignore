@@ -1,0 +1,9 @@
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.Ruserdata
+*.docx
+*_files/
+data/*.csv
+.DS_Store

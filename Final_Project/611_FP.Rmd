@@ -1,0 +1,265 @@
+---
+title: "611_Final"
+output:
+  html_document: default
+  word_document: default
+date: "2026-11-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(patchwork)
+
+payroll <- read_csv("citywide-payroll-data-fiscal-year.csv")
+```
+
+# Prepare df
+
+```{r}
+payroll <- payroll %>%
+  mutate(
+    `Fiscal Year` = as.integer(`Fiscal Year`),
+    `Base Salary` = as.numeric(`Base Salary`),
+    `Regular Gross Paid` = as.numeric(`Regular Gross Paid`),
+    `Total OT Paid` = as.numeric(`Total OT Paid`),
+    `Total Other Pay` = as.numeric(`Total Other Pay`),
+    `Agency Name` = toupper(trimws(`Agency Name`))
+  ) %>%
+  filter(`Fiscal Year` %in% 2015:2020)
+```
+
+# Cols of the df
+
+Base salary: Base Salary assigned to the employee
+
+Regular Gross Paid: The amount paid to the employee for base salary during the fiscal year
+
+OT Hours: Overtime Hours worked by employee in the fiscal year
+
+Total OT Paid: Total overtime pay paid to the employee in the fiscal year
+
+Total Other Pay: Includes any compensation in addition to gross salary and overtime pay, ie Differentials, lump sums, uniform allowance, meal allowance, retroactive pay increases, settlement amounts, and bonus pay, if applicable.
+
+# Payroll spending and median salary (2015–2020)
+
+```{r fig.width=10, fig.height=5}
+fig1_data <- payroll %>%
+  mutate(
+    total_pay = coalesce(`Regular Gross Paid`, 0) +
+                coalesce(`Total OT Paid`, 0) +
+                coalesce(`Total Other Pay`, 0)
+  ) %>%
+  group_by(`Fiscal Year`) %>%
+  summarise(
+    total_spending = sum(total_pay, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+fig1_salary <- payroll %>%
+  filter(
+    grepl("annual|annum", `Pay Basis`, ignore.case = TRUE),
+    `Base Salary` > 0,
+    !is.na(`Base Salary`)
+  ) %>%
+  group_by(`Fiscal Year`) %>%
+  summarise(
+    median_salary = median(`Base Salary`),
+    .groups = "drop"
+  )
+
+p1 <- ggplot(fig1_data,
+             aes(x = `Fiscal Year`, y = total_spending)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "steelblue", size = 2.5) +
+  scale_x_continuous(breaks = 2015:2020) +
+  scale_y_continuous(
+    labels = label_dollar(scale = 1e-9, suffix = "B")
+  ) +
+  labs(
+    title = "Total Payroll Spending",
+    x = "Fiscal Year",
+    y = "Total Spending (Billion USD)"
+  ) +
+  theme_minimal()
+
+p2 <- ggplot(fig1_salary,
+             aes(x = `Fiscal Year`, y = median_salary)) +
+  geom_line(color = "darkorange", linewidth = 1.2) +
+  geom_point(color = "darkorange", size = 2.5) +
+  scale_x_continuous(breaks = 2015:2020) +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(
+    title = "Median Annual Base Salary",
+    x = "Fiscal Year",
+    y = "Median Salary (USD)"
+  ) +
+  theme_minimal()
+
+p1 + p2 +
+  plot_annotation(
+    title = "NYC Payroll and Salary Trends (2015–2020)"
+  )
+```
+
+Both total payroll spending and median annual base salary generally increased between 2015 and 2020. Total payroll spending rose steadily from approximately \$24.4 billion in 2015 to \$30.4 billion in 2020. Meanwhile, median annual base salary increased from approximately \$67,500 to \$76,600, with a particularly noticeable increase between 2019 and 2020. These findings suggest that NYC experienced growth in both overall payroll expenditures and typical employee salaries during this period, although changes in workforce size and composition may also contribute to these trends.
+
+# Distribution of annual base salaries (2020)
+
+```{r fig.width=8, fig.height=4}
+fig2_data <- payroll %>%
+  filter(
+    `Fiscal Year` == 2020,
+    grepl("annual|annum", `Pay Basis`, ignore.case = TRUE),
+    !is.na(`Base Salary`),
+    `Base Salary` > 0
+  )
+
+ggplot(fig2_data, aes(x = `Base Salary`)) +
+  geom_histogram(
+    bins = 50,
+    fill = "steelblue",
+    color = "white"
+  ) +
+  scale_x_continuous(labels = label_dollar()) +
+  labs(
+    title = "Distribution of Annual Base Salaries (2020)",
+    x = "Annual Base Salary (USD)",
+    y = "Number of Employees"
+  ) +
+  theme_minimal()
+```
+
+The distribution of annual base salaries in 2020 is right-skewed, with most employees earning approximately \$40,000 to \$120,000 annually. Two noticeable peaks appear around \$45,000 and \$90,000, suggesting concentrations of employees at particular salary levels. Relatively few employees earn more than \$150,000, although the distribution extends beyond \$400,000. Overall, the figure shows substantial variation in employee salaries, potentially reflecting differences in job responsibilities, seniority, and agency.
+
+# Top 10 agencies by total payroll spending (2014–2020)
+
+```{r fig.width=8, fig.height=4}
+fig3_data <- payroll %>%
+  group_by(`Agency Name`) %>%
+  summarise(
+    total_pay = sum(
+      `Regular Gross Paid` +
+      `Total OT Paid` +
+      `Total Other Pay`,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  slice_max(total_pay, n = 10, with_ties = FALSE)
+
+ggplot(
+  fig3_data,
+  aes(x = reorder(`Agency Name`, total_pay),
+      y = total_pay)
+) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  scale_y_continuous(
+    labels = label_dollar(scale = 1e-9, suffix = "B")
+  ) +
+  labs(
+    title = "Top 10 NYC Agencies by Total Payroll Spending (2015–2020)",
+    x = "Agency",
+    y = "Total Payroll Spending (Billion USD)"
+  ) +
+  theme_minimal()
+```
+
+Payroll spending is highly concentrated among a few major NYC agencies. The Department of Education Pedagogical accounts for the largest cumulative payroll expenditure, exceeding \$50 billion, followed by the Police Department at approximately \$30 billion. The Fire Department ranks third at around \$11 billion, while the remaining agencies have considerably lower expenditures. These differences likely reflect variations in workforce size and compensation structures. Notably, education-related agencies collectively represent a substantial portion of NYC's payroll spending.
+
+# Median total gross pay by NYC borough (2015–2020)
+
+```{r fig.width=10, fig.height=8}
+# Prepare data
+fig5_data <- payroll %>%
+  mutate(
+    borough = toupper(trimws(`Work Location Borough`)),
+    borough = ifelse(is.na(borough), "UNKNOWN", borough),
+    total_pay = coalesce(`Regular Gross Paid`, 0) +
+                coalesce(`Total OT Paid`, 0) +
+                coalesce(`Total Other Pay`, 0)
+  ) %>%
+  filter(
+    `Fiscal Year` %in% 2015:2020,
+    total_pay > 0,
+    grepl("annual|annum", `Pay Basis`, ignore.case = TRUE)
+  ) %>%
+  group_by(`Fiscal Year`, borough) %>%
+  summarise(
+    median_pay = median(total_pay),
+    .groups = "drop"
+  )
+
+# Manually assign colors
+location_colors <- c(
+  # Five NYC boroughs: strong, distinct colors
+  "MANHATTAN"     = "#E41A1C",  # Red
+  "BROOKLYN"      = "#377EB8",  # Blue
+  "QUEENS"        = "#4DAF4A",  # Green
+  "BRONX"         = "#FF7F00",  # Orange
+  "RICHMOND"      = "#984EA3",  # Purple
+
+  # Other locations
+  "ALBANY"        = "#A65628",  # Brown
+  "DELAWARE"      = "#8DA0CB",  # Light blue
+  "DUTCHESS"      = "#66A61E",  # Olive
+  "GREENE"        = "#E6AB02",  # Gold
+  "NASSAU"        = "#1B9E77",  # Teal
+  "ORANGE"        = "#D95F02",  # Dark orange
+  "OTHER"         = "#7570B3",  # Lavender
+  "PUTNAM"        = "#00BFC4",  # Cyan
+  "SCHOHARIE"     = "#B3B3B3",  # Gray
+  "SULLIVAN"      = "#FC8D62",  # Coral
+  "ULSTER"        = "#A6D854",  # Lime
+  "UNKNOWN"       = "#666666",  # Dark gray
+  "WASHINGTON DC" = "#E7298A",  # Magenta
+  "WESTCHESTER"   = "#F781BF"   # Pink
+)
+
+# Plot
+ggplot(
+  fig5_data,
+  aes(
+    x = `Fiscal Year`,
+    y = median_pay,
+    color = borough,
+    group = borough
+  )
+) +
+  geom_line(linewidth = 1, alpha = 0.85) +
+  geom_point(size = 2) +
+  scale_color_manual(values = location_colors) +
+  scale_x_continuous(breaks = 2015:2020) +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(
+    title = "Median Total Gross Pay by Work Location (2015–2020)",
+    x = "Fiscal Year",
+    y = "Median Total Gross Pay (USD)",
+    color = "Work Location"
+  ) +
+  guides(
+    color = guide_legend(
+      ncol = 4,
+      byrow = TRUE,
+      override.aes = list(linewidth = 1.5, size = 3)
+    )
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 15),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 9),
+    panel.grid.minor = element_blank()
+  )
+```
+
+Median total gross pay varies across work locations, although most locations remain within approximately \$60,000 to \$90,000 throughout the study period. Several locations exhibit relatively stable compensation patterns, while others show substantial fluctuations. For example, Washington DC displays considerable variation, reaching nearly \$120,000 in 2018 before declining in subsequent years. In contrast, the five NYC boroughs generally show more moderate changes over time. These findings suggest geographical differences in employee compensation, potentially influenced by agency distribution, job characteristics, and workforce composition. However, locations with smaller employee populations may exhibit greater year-to-year variability.
+
+# Conclusion
+
+NYC payroll expenditures and median salaries increased between 2015 and 2020, while compensation varied considerably across agencies, salary levels, and work locations. The results provide descriptive evidence of differences in NYC government employee compensation, although further analysis would be needed to determine the underlying causes of these patterns.
